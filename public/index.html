@@ -1,0 +1,139 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Transkription</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon.png"><meta name="theme-color" content="#0a84ff"><meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#f5f5f7;--c:#fff;--t:#1d1d1f;--b:#0a84ff}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--c:#1c1c1e;--t:#f5f5f7}}
+body{margin:0;font:16px -apple-system,system-ui,sans-serif;background:var(--bg);color:var(--t);padding:env(safe-area-inset-top) env(safe-area-inset-right) 110px env(safe-area-inset-left)}
+main{max-width:820px;margin:auto;padding:16px}.card{background:var(--c);border-radius:16px;padding:16px;margin:12px 0}
+button,select,input{font:inherit;border-radius:12px;border:0;padding:12px 16px;background:var(--b);color:#fff;margin:4px 4px 4px 0}
+select,input[type=text]{background:var(--bg);color:var(--t)}button.g{background:var(--bg);color:var(--t)}button.r{background:#ff3b30}
+.s{padding:8px 0;border-bottom:1px solid #8883}.s.on{background:#0a84ff22}.s select{padding:4px 8px;font-weight:600}
+.ts{color:var(--b);cursor:pointer;font-size:13px}.u1{background:#ffe066;color:#000}.u2{background:#ff9f0a;color:#000}
+[data-theme=dark]{--bg:#000;--c:#1c1c1e;--t:#f5f5f7}[data-theme=light]{--bg:#f5f5f7;--c:#fff;--t:#1d1d1f}.u3{background:#ff453a;color:#fff}.bad{outline:2px solid #ff9f0a}textarea{width:100%;min-height:140px;border-radius:12px;border:0;padding:12px;font:inherit;background:var(--bg);color:var(--t);box-sizing:border-box}.s button{padding:2px 8px;margin:0 2px;font-size:13px}.notime .ts{display:none}.tx{outline:0;padding:4px 0}.hide{display:none}
+#player{position:fixed;bottom:0;left:0;right:0;background:var(--c);padding:8px 16px calc(8px + env(safe-area-inset-bottom))}#player audio{width:100%}
+</style></head><body><main>
+<h1>Transkription <button class="g" id="th" style="float:right;font-size:13px">Design</button></h1>
+<div class="card" id="home">
+ <button id="rec">● Aufnahme starten</button><button id="pause" class="g hide">Pause</button><button id="stop" class="r hide">Beenden</button>
+ <span id="clock"></span><canvas id="wave" class="hide" width="600" height="60" style="width:100%"></canvas><p><label>Datei (MP3, WAV, M4A, AAC, FLAC, OGG, WebM): <input type="file" id="file" accept="audio/*"></label></p>
+ <p>Sprache <select id="lang"><option value="auto">Automatisch</option><option value="de">Deutsch</option><option value="en">Englisch</option><option value="fr">Französisch</option><option value="es">Spanisch</option><option value="it">Italienisch</option><option value="nl">Niederländisch</option><option value="pt">Portugiesisch</option><option value="pl">Polnisch</option><option value="tr">Türkisch</option></select>
+ Sprecher <select id="spk"><option value="0">Automatisch</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></p>
+ <audio id="prev" controls class="hide" style="width:100%"></audio>
+ <button id="go" disabled>Transkription starten</button><button id="rt" class="hide">Erneut versuchen</button><p id="status"></p><p id="info" style="font-size:13px;opacity:.7"></p>
+ <div id="past"></div>
+</div>
+<div id="res" class="card hide">
+ <input type="text" id="title" value="Transkription"> <button id="tsb" class="g">Zeitstempel ausblenden</button>
+ <button id="cb" class="g">Füllwörter entfernen</button> <button id="rv" class="g">Unsichere Stellen prüfen</button>
+ <button id="un" class="g">↶ Rückgängig</button><button id="re" class="g">↷ Wiederholen</button><button id="og" class="g">Original wiederherstellen</button><button id="cp" class="g">Kopieren</button><button id="pdf">PDF herunterladen</button><button id="docx">Word herunterladen</button>
+ <label><input type="checkbox" id="auto" checked style="margin:0 4px"> Mitlaufen</label>
+ <p><input type="text" id="q" placeholder="Suchen…"></p><div id="chips"></div><div id="tx"></div><h3>Zusammenfassung</h3><select id="sm"><option value="kurz">Kurz</option><option value="ausfuehrlich">Ausführlich</option><option value="stichpunkte">Stichpunkte</option><option value="themen">Nach Themen</option><option value="ergebnisse">Wichtigste Aussagen</option><option value="aufgaben">Aufgaben &amp; nächste Schritte</option><option value="fragen">Fragen &amp; offene Punkte</option><option value="sprecher">Nach Sprechern</option></select><button id="sg">Zusammenfassen</button><button id="sc" class="g">Kopieren</button><p id="stale" class="hide" style="color:#ff9f0a">Das Transkript wurde geändert – die Zusammenfassung ist möglicherweise nicht mehr aktuell.</p><textarea id="sum" placeholder="Hier erscheint die (bearbeitbare) Zusammenfassung"></textarea>
+</div></main>
+<div id="player" class="hide"><audio id="au" controls></audio>
+ <select id="rate"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
+ <button class="g" onclick="au.currentTime-=10">−10s</button><button class="g" onclick="au.currentTime+=10">+10s</button></div>
+<script>
+const $=i=>document.getElementById(i),au=$('au');let H=[],hi=-1,cache={},cur=null,sidx=-1,S=[],names={},id=null,clean=false,file=null,rec,chunks=[],tick,sec=0,ids=[];
+const FILL=/^(äh+m?|ähm|öhm|hm+|mhm|sozusagen)[,.]?$/i;
+const fmt=ms=>{const s=Math.floor(ms/1000);return[s/3600|0,s/60%60|0,s%60].map(x=>String(x).padStart(2,'0')).join(':')};
+const lv=w=>w.c==null?0:w.c<.15?3:w.c<.4?2:w.c<.7?1:0;
+const nm=sp=>sp==='?'?'Sprecher nicht eindeutig erkannt':names[sp]||'Sprecher '+(ids.indexOf(sp)+1);
+const words=s=>s.txt!=null?[{t:s.txt,c:1}]:clean?s.words.filter(w=>!FILL.test(w.t)):s.words;
+const err=e=>$('status').textContent='⚠️ '+e;
+function setFile(f){file=f;$('prev').src=URL.createObjectURL(f);$('prev').classList.remove('hide');$('go').disabled=false;
+ $('status').textContent=`${f.name} · ${f.type||'?'} · ${(f.size/1048576).toFixed(1)} MB`}
+$('file').onchange=e=>e.target.files[0]&&setFile(e.target.files[0]);
+$('rec').onclick=async()=>{try{const st=await navigator.mediaDevices.getUserMedia({audio:true});rec=new MediaRecorder(st);chunks=[];sec=0;
+ rec.ondataavailable=e=>chunks.push(e.data);
+ rec.onstop=()=>{clearInterval(tick);st.getTracks().forEach(t=>t.stop());const ty=rec.mimeType||'audio/mp4';
+  setFile(new File([new Blob(chunks,{type:ty})],'aufnahme.'+(ty.includes('mp4')?'m4a':'webm'),{type:ty}));
+  ['pause','stop'].forEach(i=>$(i).classList.add('hide'));$('rec').classList.remove('hide')};
+ rec.start(1000);wave(st);tick=setInterval(()=>{if(rec.state==='recording'){sec++;$('clock').textContent='● '+fmt(sec*1000)}},1000);
+ ['pause','stop'].forEach(i=>$(i).classList.remove('hide'));$('rec').classList.add('hide')}
+ catch(e){err('Mikrofonzugriff nicht möglich. Bitte in den Safari-Einstellungen erlauben oder stattdessen eine Datei wählen.')}};
+$('pause').onclick=()=>{if(rec.state==='recording'){rec.pause();$('pause').textContent='Fortsetzen'}else{rec.resume();$('pause').textContent='Pause'}};
+$('stop').onclick=()=>rec.stop();
+$('go').onclick=async()=>{$('go').disabled=true;$('status').textContent='Wird hochgeladen…';
+ const f=new FormData();f.append('audio',file);f.append('lang',$('lang').value);f.append('speakers',$('spk').value);
+ try{const r=await fetch('/api/jobs',{method:'POST',body:f}),j=await r.json();if(!r.ok)throw new Error(j.error||'Upload fehlgeschlagen');
+  cur=j.id;localStorage.pend=j.id;poll(j.id)}catch(e){err(e.message);$('go').disabled=false}};
+const poll=async jid=>{try{const s=await(await fetch('/api/jobs/'+jid)).json();
+ if(s.status==='error'){err(s.error);cur=jid;$('rt').classList.remove('hide');$('go').disabled=false}
+ else if(s.status==='done'){localStorage.removeItem('pend');$('rt').classList.add('hide');open_(jid,s.sentences,{},$('title').value);save();prefetch()}
+ else{$('status').textContent='Wird verarbeitet (bei langen Aufnahmen kann das dauern)…';setTimeout(()=>poll(jid),3000)}}
+ catch{$('status').textContent='Verbindung unterbrochen, versuche erneut…';setTimeout(()=>poll(jid),5000)}};
+$('rt').onclick=async()=>{$('rt').classList.add('hide');$('status').textContent='Neuer Versuch…';await fetch('/api/jobs/'+cur+'/retry',{method:'POST'});poll(cur)};
+const refIds=()=>ids=[...new Set(S.map(x=>x.speaker))].filter(x=>x!=='?');
+function open_(i,s,n,t,sm){id=i;S=s;names=n;clean=false;refIds();$('title').value=t||'Transkription';$('sum').value=sm||'';$('stale').classList.add('hide');
+ H=[JSON.stringify({S,names})];hi=0;cache={};au.src='/audio/'+id;$('player').classList.remove('hide');$('res').classList.remove('hide');$('status').textContent='✅ Fertig';render()}
+const snap=()=>{H=H.slice(0,hi+1);H.push(JSON.stringify({S,names}));if(H.length>100)H.shift();hi=H.length-1;cache={};if($('sum').value)$('stale').classList.remove('hide');save()};
+const goto=k=>{if(k<0||k>=H.length)return;hi=k;const o=JSON.parse(H[hi]);S=o.S;names=o.names;cache={};refIds();render();save()};
+$('un').onclick=()=>goto(hi-1);$('re').onclick=()=>goto(hi+1);$('og').onclick=()=>{if(confirm('Alle Änderungen verwerfen? (Mit „Rückgängig“ wieder herstellbar)')){H=H.slice(0,hi+1);H.push(H[0]);goto(H.length-1)}};
+function render(){const q=$('q').value.trim().toLowerCase();
+ $('chips').innerHTML=ids.map(sp=>`<button class="g" data-sp="${sp}">${esc(nm(sp))} ✎</button>`).join('');
+ $('tx').innerHTML=S.map((s,i)=>{const w=words(s);if(!w.length)return'';
+  const txt=s.txt!=null?esc(s.txt):w.map(x=>lv(x)===3?`<span class="u3" title="${esc(x.t)}">[unverständlich, ${fmt(x.s)}]</span>`:`<span class="${['','u1','u2'][lv(x)]}">${esc(x.t)}</span>`).join(' ');
+  const hit=q&&w.map(x=>x.t).join(' ').toLowerCase().includes(q)?' style="outline:2px solid #34c759"':'';
+  return`<div class="s${s.speaker==='?'?' bad':''}" data-i="${i}"${hit}><select>${[...ids,'?'].map(sp=>`<option value="${sp}"${sp===s.speaker?' selected':''}>${esc(nm(sp))}</option>`).join('')}<option value="new">＋ Neuer Sprecher…</option></select>
+  <span class="ts">${s.added?'(ohne Zeitangabe)':`(${fmt(s.start)}–${fmt(s.end)})${s.edited?'* geändert':''}`}</span>
+  <button class="g" data-add="1">＋</button><button class="g" data-del="1">✕</button><div class="tx" contenteditable>${txt}</div></div>`}).join('')}
+const esc=t=>t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const seek=ms=>{au.currentTime=Math.max(0,ms/1000-3);au.play()};
+$('tx').onclick=e=>{const d=e.target.closest('.s');if(!d)return;const i=+d.dataset.i,s=S[i];
+ if(e.target.dataset.del){S.splice(i,1);refIds();snap();return render()}
+ if(e.target.dataset.add){S.splice(i+1,0,{speaker:s.speaker,start:s.end,end:s.end,txt:'',words:[],edited:1,added:1});snap();return render()}
+ if(e.target.classList.contains('ts')&&!s.added||e.target.closest('.u1,.u2,.u3'))seek(s.start)};
+$('tx').onchange=e=>{if(e.target.tagName!=='SELECT')return;const i=+e.target.closest('.s').dataset.i;let v=e.target.value;
+ if(v==='new'){const n=prompt('Name des neuen Sprechers');if(!n)return render();v='N'+Date.now();names[v]=n}
+ S[i].speaker=v;refIds();snap();render()};
+let ty;$('tx').oninput=e=>{const d=e.target.closest('.s');if(!d)return;const s=S[d.dataset.i];s.txt=e.target.innerText;s.edited=1;clearTimeout(ty);ty=setTimeout(snap,800)};
+$('chips').onclick=e=>{const sp=e.target.dataset.sp;if(!sp)return;const a=prompt(`${nm(sp)}: 1 = Umbenennen · 2 = Mit anderem zusammenführen · 3 = Löschen (Sätze werden „nicht eindeutig“)`);
+ if(a==='1'){const n=prompt('Neuer Name',nm(sp));if(n)names[sp]=n}
+ else if(a==='2'){const o=ids.filter(x=>x!==sp),k=+prompt('Zusammenführen mit:\n'+o.map((x,i)=>`${i+1} = ${nm(x)}`).join('\n'));if(!o[k-1])return;S.forEach(x=>{if(x.speaker===sp)x.speaker=o[k-1]})}
+ else if(a==='3'){S.forEach(x=>{if(x.speaker===sp)x.speaker='?'})}else return;
+ refIds();snap();render()};
+$('tsb').onclick=()=>{const h=$('tx').classList.toggle('notime');$('tsb').textContent=h?'Zeitstempel anzeigen':'Zeitstempel ausblenden'};
+$('cb').onclick=()=>{clean=!clean;$('cb').textContent=clean?'Originalfassung zeigen':'Füllwörter entfernen';render()};
+$('q').oninput=render;
+$('rv').onclick=()=>{const bad=[];S.forEach(s=>s.txt==null&&s.words.forEach(w=>lv(w)&&bad.push(w)));
+ let k=0;const next=()=>{if(k>=bad.length){snap();render();return alert('Alle markierten Stellen geprüft.')}const w=bad[k++];seek(w.s);
+  const n=prompt(`Unsicher: „${w.t}“ (${fmt(w.s)}). Die Stelle wird abgespielt. Korrigieren oder leer lassen = so übernehmen. Abbrechen beendet.`,w.t);
+  if(n===null){snap();return render()}w.t=n;w.c=1;next()};next()};
+$('cp').onclick=()=>navigator.clipboard.writeText(S.map(s=>`${nm(s.speaker)}: ${words(s).map(w=>w.t).join(' ')}`).join('\n')).then(()=>$('cp').textContent='Kopiert ✓');
+async function mk(f){const body={title:$('title').value,filename:$('title').value.replace(/[^\wäöüÄÖÜß -]/g,'_'),showTs:!$('tx').classList.contains('notime'),summary:$('sum').value,
+ meta:'Stand: '+new Date().toLocaleString('de-DE')+' · Sprecher: '+ids.length+(clean?' · Füllwörter entfernt':'')+(hi>0?' · bearbeitet':' · Originalfassung'),
+ sentences:S.filter(s=>words(s).some(w=>w.t)).map(s=>({speaker:nm(s.speaker),start:s.start,end:s.end,runs:s.txt!=null?[{t:s.txt,lv:0}]:words(s).map(w=>lv(w)===3?{t:`[unverständlich, ${fmt(w.s)}]`,lv:2}:{t:w.t,lv:lv(w)})}))};
+ const r=await fetch('/api/export/'+f,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw 0;return{blob:await r.blob(),name:body.filename+'.'+f}}
+async function exp(f){try{const k=f+clean+$('tx').className+$('sum').value;if(!cache[f]||cache[f].k!==k){cache[f]=await mk(f);cache[f].k=k}
+ const a=document.createElement('a');a.href=URL.createObjectURL(cache[f].blob);a.download=cache[f].name;a.click()}
+ catch{alert('Dokument konnte nicht erstellt werden. Das Transkript ist weiterhin gespeichert.')}}
+async function prefetch(){try{for(const f of['pdf','docx']){cache[f]=await mk(f);cache[f].k=f+clean+$('tx').className+$('sum').value}$('status').textContent='✅ Fertig – PDF und Word wurden erstellt'}catch{$('status').textContent='⚠️ Transkript fertig, aber PDF/Word konnten nicht erstellt werden (Export später erneut versuchen).'}}
+$('pdf').onclick=()=>exp('pdf');$('docx').onclick=()=>exp('docx');
+$('rate').onchange=()=>au.playbackRate=+$('rate').value;
+au.ontimeupdate=()=>{const t=au.currentTime*1000;const i=S.findIndex(s=>t>=s.start&&t<=s.end);
+ document.querySelectorAll('.s.on').forEach(x=>x.classList.remove('on'));
+ const el=$('tx').querySelector(`[data-i="${i}"]`);if(el){el.classList.add('on');if($('auto').checked)el.scrollIntoView({block:'center',behavior:'smooth'})}};
+function save(){try{const l=JSON.parse(localStorage.tx||'{}');l[id]={t:$('title').value,d:Date.now(),S,names,sum:$('sum').value};localStorage.tx=JSON.stringify(l);list()}catch{}}
+function list(){const l=JSON.parse(localStorage.tx||'{}');$('past').innerHTML='<h3>Meine Transkriptionen</h3>'+Object.entries(l).map(([k,v])=>
+ `<div><a href="#" data-o="${k}">${esc(v.t)}</a> · ${new Date(v.d).toLocaleDateString('de-DE')} <button class="g" data-x="${k}">Löschen</button></div>`).join('')}
+$('past').onclick=async e=>{const o=e.target.dataset.o,x=e.target.dataset.x,l=JSON.parse(localStorage.tx||'{}');
+ if(o){e.preventDefault();open_(o,l[o].S,l[o].names,l[o].t,l[o].sum)}
+ if(x&&confirm('Aufnahme und Transkript endgültig löschen?')){await fetch('/api/jobs/'+x,{method:'DELETE'});delete l[x];localStorage.tx=JSON.stringify(l);list()}};
+function wave(st){const ac=new AudioContext(),an=ac.createAnalyser();ac.createMediaStreamSource(st).connect(an);const d=new Uint8Array(an.fftSize),cv=$('wave'),g=cv.getContext('2d');cv.classList.remove('hide');
+ const f=()=>{if(!rec||rec.state==='inactive'){cv.classList.add('hide');ac.close();return}an.getByteTimeDomainData(d);g.clearRect(0,0,600,60);g.beginPath();g.strokeStyle='#0a84ff';d.forEach((v,i)=>g.lineTo(i/d.length*600,v/255*60));g.stroke();requestAnimationFrame(f)};f()}
+addEventListener('beforeunload',e=>{if(rec&&rec.state!=='inactive')e.preventDefault()});
+$('sg').onclick=async()=>{$('sg').disabled=true;$('sg').textContent='Wird erstellt…';
+ try{const t=S.map(s=>`${nm(s.speaker)}: ${words(s).map(w=>lv(w)?w.t+'[?]':w.t).join(' ')}`).join('\n');
+  const r=await fetch('/api/summary',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:$('sm').value,text:t})}),j=await r.json();
+  if(!r.ok)throw new Error(j.error);$('sum').value=j.summary;$('stale').classList.add('hide');cache={};save()}catch(e){alert(e.message)}
+ $('sg').disabled=false;$('sg').textContent='Zusammenfassen'};
+$('sc').onclick=()=>navigator.clipboard.writeText($('sum').value);$('sum').oninput=()=>{cache={};save()};
+$('q').onkeydown=e=>{if(e.key!=='Enter')return;const q=$('q').value.trim().toLowerCase(),h=S.map((s,i)=>i).filter(i=>words(S[i]).map(w=>w.t).join(' ').toLowerCase().includes(q));
+ if(!h.length)return;sidx=(sidx+1)%h.length;const s=S[h[sidx]];if(!s.added)seek(s.start);$('tx').querySelector(`[data-i="${h[sidx]}"]`)?.scrollIntoView({block:'center'})};
+const TH=['auto','light','dark'];const th=n=>{if(n==='auto')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=n;$('th').textContent='Design: '+n;localStorage.th=n};
+$('th').onclick=()=>th(TH[(TH.indexOf(localStorage.th||'auto')+1)%3]);th(localStorage.th||'auto');
+fetch('/api/info').then(r=>r.json()).then(j=>$('info').textContent=j.engine==='local'?'Datenschutz: Dein Audio wird nur an den lokalen Dienst auf diesem Server übergeben, nicht an externe Anbieter.':'Achtung: Dein Audio wird zur Transkription an AssemblyAI (extern, kostenpflichtig) übertragen.');
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
+if(localStorage.pend){cur=localStorage.pend;$('status').textContent='Laufende Transkription wird fortgesetzt…';poll(cur)}
+list();
+</script></body></html>
